@@ -13,10 +13,11 @@ from forest.pdictng import aPersistDict, aPersistDictOfLists
 
 def takes_number(command: Callable) -> Callable:
     @wraps(command)  # keeps original name and docstring for /help
-    async def wrapped_command(self: "QuestionBot", msg: Message) -> str:
-        if msg.arg1 in self.user_names.inverse:
-            target_number = self.user_names.inverse[msg.arg1]
-            return await command(self, msg, target_number)
+    async def wrapped_command(self: "Whispr", msg: Message) -> str:
+        if msg.arg1:
+            maybe_number = self.name_numbers.get(msg.arg1)
+            if maybe_number:
+                return await command(self, msg, maybe_number)
         try:
             assert msg.arg1
             parsed = pn.parse(msg.arg1, None)
@@ -33,10 +34,12 @@ def takes_number(command: Callable) -> Callable:
 
 
 class Whispr(QuestionBot):
-    user_names: aPersistDict[str] = aPersistDict("user_names")
-    name_numbers: aPersistDict[str] = aPersistDict("name_numbers")
-    followers: aPersistDictOfLists[str] = aPersistDictOfLists("followers")
-    blocked: aPersistDictOfLists[bool] = aPersistDict("blocked")
+    def __init__(self, bot_number: Optional[str] = None) -> None:
+        self.user_names: aPersistDict[str] = aPersistDict("user_names")
+        self.name_numbers: aPersistDict[str] = aPersistDict("name_numbers")
+        self.followers: aPersistDictOfLists[str] = aPersistDictOfLists("followers")
+        self.blocked: aPersistDict[bool] = aPersistDict("blocked")
+        super().__init__(bot_number)
 
     async def greet(self, recipient: str) -> None:
         await self.user_names.set(recipient, recipient)
@@ -47,7 +50,7 @@ class Whispr(QuestionBot):
             "text STOP or BLOCK to not receive messages. type /help "
             "to view available commands.",
         )
-        name = await self.ask_freeform_question("what would you like to be called?")
+        name = await self.ask_freeform_question(recipient, "what would you like to be called?")
         if name in await self.name_numbers.keys():
             await super().send_message(
                 recipient,
@@ -56,7 +59,9 @@ class Whispr(QuestionBot):
         else:
             await self.user_names.set(recipient, name)
             await self.name_numbers.set(name, recipient)
-            await super().send_message(f"other users will now see you as {name}")
+            await super().send_message(
+                recipient, f"other users will now see you as {name}"
+            )
 
     async def send_message(  # pylint: disable=too-many-arguments
         self,
@@ -71,7 +76,7 @@ class Whispr(QuestionBot):
             return await super().send_message(
                 recipient, msg, group, endsession, attachments, content
             )
-        if recipient in self.blocked:
+        if recipient in await self.blocked.keys():
             logging.debug("recipient % is blocked, not sending", recipient)
             return ""
         ret = await super().send_message(
@@ -81,24 +86,47 @@ class Whispr(QuestionBot):
             await self.greet(recipient)
         return ret
 
-    async def do_default(self, msg: Message) -> None:
+    async def handle_message(self, message: Message) -> Response:
+        if message.text and message.text.lower() in ("stop", "block"):
+            await self.blocked.set(message.source, True)
+            return "i'll stop messaging you. text START or UNBLOCK to resume texts"
+        if message.text and message.text.lower() in ("start", "unblock"):
+            if await self.blocked.pop(message.source, default=False):
+                return "welcome back"
+            return "you weren't blocked"
+        return await super().handle_message(message)
+
+    async def default(self, message: Message) -> None:
         """send a message to your followers"""
-        if msg.source not in await self.user_names.keys():
-            self.send_message(msg.source, f"{msg.text} yourself")
+        if message.source not in await self.user_names.keys():
+            await self.send_message(message.source, f"{message.text} yourself")
             # ensures they'll get a welcome message
         else:
-            name = await self.user_names.get(msg.source)
-            for follower in await self.followers.get(msg.source):
-                # self.sent_messages[round(time.time())][follower] = msg
+            name = await self.user_names.get(message.source)
+            for follower in await self.followers.get(message.source, []):
+                # self.sent_messages[round(time.time())][follower] = message
                 attachments = [
                     str(Path("attachments") / attach["id"])
-                    for attach in msg.attachments
+                    for attach in message.attachments
                 ]
                 await self.send_message(
-                    follower, f"{name}: {msg.text}", attachments=attachments
+                    follower, f"{name}: {message.text}", attachments=attachments
                 )
-                await self.send_reaction(msg, "\N{Outbox Tray}")
-            # ideally react to the message indicating it was sent?
+                await self.send_reaction(message, "\N{Outbox Tray}")
+
+    async def do_help(self, msg: Message) -> Response:
+        return (await super().do_help(msg)).lower()  # type: ignore
+
+    async def do_name(self, msg: Message) -> str:
+        """/name [name]. set or change your name"""
+        name = msg.arg1
+        old_name = await self.user_names.get(msg.source, "")
+        if not isinstance(name, str):
+            return f"missing name argument. usage: /name [name]. your name is {old_name}"
+        if name in await self.name_numbers.keys():
+            return f"'{name}' is already taken, use /name to set a different name"
+        self.user_names[msg.source] = name
+        return f"other users will now see you as {name}. you used to be {old_name}"
 
     @takes_number
     async def do_follow(self, msg: Message, target_number: str) -> str:
@@ -149,7 +177,7 @@ class Whispr(QuestionBot):
         """/following. list who you follow"""
         following = ", ".join(
             await self.user_names.get(number, number)
-            for number, followers in self.followers.items()
+            for number, followers in await self.followers.items()
             if msg.source in followers
         )
         if not following:
