@@ -15,7 +15,7 @@ def takes_number(command: Callable) -> Callable:
     @wraps(command)  # keeps original name and docstring for /help
     async def wrapped_command(self: "Whispr", msg: Message) -> str:
         if msg.arg1:
-            maybe_number = self.name_numbers.get(msg.arg1)
+            maybe_number = await self.name_numbers.get(msg.arg1)
             if maybe_number:
                 return await command(self, msg, maybe_number)
         try:
@@ -50,7 +50,9 @@ class Whispr(QuestionBot):
             "text STOP or BLOCK to not receive messages. type /help "
             "to view available commands.",
         )
-        name = await self.ask_freeform_question(recipient, "what would you like to be called?")
+        name = await self.ask_freeform_question(
+            recipient, "what would you like to be called?"
+        )
         if name in await self.name_numbers.keys():
             await super().send_message(
                 recipient,
@@ -98,7 +100,9 @@ class Whispr(QuestionBot):
 
     async def default(self, message: Message) -> None:
         """send a message to your followers"""
-        if message.source not in await self.user_names.keys():
+        if not message.source:
+            pass
+        elif message.source not in await self.user_names.keys():
             await self.send_message(message.source, f"{message.text} yourself")
             # ensures they'll get a welcome message
         else:
@@ -107,7 +111,7 @@ class Whispr(QuestionBot):
                 # self.sent_messages[round(time.time())][follower] = message
                 attachments = [
                     str(Path("attachments") / attach["id"])
-                    for attach in message.attachments
+                    for attach in (message.attachments or [])
                 ]
                 await self.send_message(
                     follower, f"{name}: {message.text}", attachments=attachments
@@ -122,7 +126,9 @@ class Whispr(QuestionBot):
         name = msg.arg1
         old_name = await self.user_names.get(msg.source, "")
         if not isinstance(name, str):
-            return f"missing name argument. usage: /name [name]. your name is {old_name}"
+            return (
+                f"missing name argument. usage: /name [name]. your name is {old_name}"
+            )
         if name in await self.name_numbers.keys():
             return f"'{name}' is already taken, use /name to set a different name"
         self.user_names[msg.source] = name
@@ -133,9 +139,8 @@ class Whispr(QuestionBot):
         """/follow [number or name]. follow someone"""
         if msg.source not in await self.followers.get(target_number, []):
             # check for payment here
-            await self.send_message(
-                target_number, f"{msg.source_name} has followed you"
-            )
+            name = await self.user_names.get(msg.source, msg.name or msg.source)
+            await self.send_message(target_number, f"{name} has followed you")
             await self.followers.extend(target_number, msg.source)
             # offer to follow back?
             return f"followed {msg.arg1}"
@@ -148,9 +153,10 @@ class Whispr(QuestionBot):
         """
 
         async def follow() -> None:
+            name = await self.user_names.get(msg.source, msg.name or msg.source)
             if await self.ask_yesno_question(
                 target_number,
-                f"{msg.source_name} invited you to follow them on whispr. "
+                f"{name} invited you to follow them on whispr. "
                 "text (y)es or (n)o/cancel to accept",
             ):
                 await self.followers.extend(target_number, msg.source)
@@ -175,14 +181,14 @@ class Whispr(QuestionBot):
 
     async def do_following(self, msg: Message) -> str:
         """/following. list who you follow"""
-        following = ", ".join(
+        followed = [
             await self.user_names.get(number, number)
             for number, followers in await self.followers.items()
             if msg.source in followers
-        )
-        if not following:
+        ]
+        if not followed:
             return "you aren't following anyone"
-        return following
+        return ", ".join(followed)
 
     @takes_number
     async def do_softblock(self, msg: Message, target_number: str) -> str:
