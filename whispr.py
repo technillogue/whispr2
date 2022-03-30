@@ -39,6 +39,7 @@ class Whispr(QuestionBot):
         self.name_numbers: aPersistDict[str] = aPersistDict("name_numbers")
         self.followers: aPersistDictOfLists[str] = aPersistDictOfLists("followers")
         self.blocked: aPersistDict[bool] = aPersistDict("blocked")
+        self.follow_price: aPersistDict[int] = aPersistDict("follow_price")
         super().__init__(bot_number)
 
     async def greet(self, recipient: str) -> None:
@@ -100,7 +101,7 @@ class Whispr(QuestionBot):
 
     async def default(self, message: Message) -> None:
         """send a message to your followers"""
-        if not message.source:
+        if not message.source or not message.text:
             pass
         elif message.source not in await self.user_names.keys():
             await self.send_message(message.source, f"{message.text} yourself")
@@ -172,11 +173,12 @@ class Whispr(QuestionBot):
 
     async def do_followers(self, msg: Message) -> str:
         """/followers. list your followers"""
-        followers = await self.followers.get(msg.source, [])
+        followers = [
+            await self.user_names.get(number, number)
+            for number in await self.followers.get(msg.source, [])
+        ]
         if followers:
-            return ", ".join(
-                await self.user_names.get(number, number) for number in followers
-            )
+            return ", ".join(followers)
         return "you don't have any followers"
 
     async def do_following(self, msg: Message) -> str:
