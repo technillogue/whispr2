@@ -9,6 +9,7 @@ from typing import Callable, Optional
 import phonenumbers as pn
 from forest.core import Message, QuestionBot, Response, requires_admin, run_bot
 from forest.pdictng import aPersistDict, aPersistDictOfLists
+from forest import utils
 
 
 def takes_number(command: Callable) -> Callable:
@@ -98,14 +99,20 @@ class Whispr(QuestionBot):
 
     async def default(self, message: Message) -> None:
         """send a message to your followers"""
-        if not message.source or not message.text:
-            pass
+        logging.info(message)
+        if not message.source or not message.full_text:
+            logging.info(
+                "no message source %s or not message text %s",
+                message.source,
+                message.text,
+            )
         elif message.source not in await self.user_names.keys():
             await self.send_message(message.source, f"{message.text} yourself")
             # ensures they'll get a welcome message
         else:
             name = await self.user_names.get(message.source)
             for follower in await self.followers.get(message.source, []):
+                logging.info("sending to follower %s", follower)
                 # self.sent_messages[round(time.time())][follower] = message
                 if utils.AUXIN:
                     attachments = [
@@ -117,10 +124,11 @@ class Whispr(QuestionBot):
                         str(Path("attachments") / attach["id"])
                         for attach in (message.attachments or [])
                     ]
+                logging.info(attachments)
                 await self.send_message(
-                    follower, f"{name}: {message.text}", attachments=attachments
+                    follower, f"{name}: {message.full_text}", attachments=attachments
                 )
-                await self.send_reaction(message, "\N{Outbox Tray}")
+            # await self.send_reaction(message, "\N{Outbox Tray}")
 
     async def do_help(self, msg: Message) -> Response:
         return (await super().do_help(msg)).lower()  # type: ignore
