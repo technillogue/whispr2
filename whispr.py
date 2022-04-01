@@ -107,10 +107,16 @@ class Whispr(QuestionBot):
             name = await self.user_names.get(message.source)
             for follower in await self.followers.get(message.source, []):
                 # self.sent_messages[round(time.time())][follower] = message
-                attachments = [
-                    str(Path("attachments") / attach["id"])
-                    for attach in (message.attachments or [])
-                ]
+                if utils.AUXIN:
+                    attachments = [
+                        str(Path("/tmp") / attach["filename"])
+                        for attach in (message.attachments or [])
+                    ]
+                else:
+                    attachments = [
+                        str(Path("attachments") / attach["id"])
+                        for attach in (message.attachments or [])
+                    ]
                 await self.send_message(
                     follower, f"{name}: {message.text}", attachments=attachments
                 )
@@ -129,7 +135,8 @@ class Whispr(QuestionBot):
             )
         if name in await self.name_numbers.keys():
             return f"'{name}' is already taken, use /name to set a different name"
-        self.user_names[msg.source] = name
+        await self.user_names.set(msg.source, name)
+        await self.name_numbers.set(name, msg.source)
         return f"other users will now see you as {name}. you used to be {old_name}"
 
     @takes_number

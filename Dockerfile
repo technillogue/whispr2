@@ -2,11 +2,10 @@
 # RUN signal-cli --version | tee /signal-version
 # RUN mv /usr/bin/signal-cli-native /usr/bin/signal-cli
 
-FROM ubuntu:hirsute as auxin
-WORKDIR /app
-RUN apt-get update && apt-get -yy install curl unzip
-RUN curl -L --output auxin-cli.zip https://nightly.link/mobilecoinofficial/auxin/workflows/actions/main/auxin-cli.zip
-RUN unzip auxin-cli.zip && chmod +x ./auxin-cli
+FROM dockerqa/unzip
+WORKDIR /app 
+ADD https://nightly.link/mobilecoinofficial/auxin/workflows/actions/main/auxin-cli.zip .
+RUN unzip auxin-cli
 
 FROM python:3.9 as libbuilder
 WORKDIR /app
