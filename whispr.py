@@ -116,7 +116,7 @@ class Whispr(QuestionBot):
                 # self.sent_messages[round(time.time())][follower] = message
                 if utils.AUXIN:
                     attachments = [
-                        str(Path("/tmp") / attach["filename"])
+                        str(Path("/tmp") / attach["fileName"])
                         for attach in (message.attachments or [])
                     ]
                 else:

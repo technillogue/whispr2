@@ -5,7 +5,7 @@
 FROM ubuntu:hirsute as auxin
 WORKDIR /app
 RUN apt-get update && apt-get -yy install curl unzip
-RUN curl -L --output auxin-cli.zip https://nightly.link/mobilecoinofficial/auxin/workflows/actions/main/auxin-cli.zip
+RUN curl -L --output auxin-cli.zip https://nightly.link/mobilecoinofficial/auxin/workflows/actions/feature%2Fgroup-improvements/auxin-cli.zip
 RUN unzip auxin-cli.zip && chmod +x ./auxin-cli
 
 FROM python:3.9 as libbuilder
@@ -13,7 +13,7 @@ WORKDIR /app
 RUN pip install poetry
 RUN python3.9 -m venv /app/venv 
 COPY ./pyproject.toml ./poetry.lock /app/
-RUN VIRTUAL_ENV=/app/venv poetry install 
+RUN VIRTUAL_ENV=/app/venv poetry install --no-dev
 
 FROM ubuntu:hirsute
 WORKDIR /app
