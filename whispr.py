@@ -74,18 +74,15 @@ class Whispr(QuestionBot):
         endsession: bool = False,
         attachments: Optional[list[str]] = None,
         content: str = "",
+        **other_params: str,
     ) -> str:
-        if not recipient:
-            return await super().send_message(
-                recipient, msg, group, endsession, attachments, content
-            )
-        if recipient in await self.blocked.keys():
+        if recipient and recipient in await self.blocked.keys():
             logging.debug("recipient % is blocked, not sending", recipient)
             return ""
         ret = await super().send_message(
-            recipient, msg, group, endsession, attachments, content
+            recipient, msg, group, endsession, attachments, content, **other_params
         )
-        if not group and recipient not in await self.user_names.keys():
+        if recipient and recipient not in await self.user_names.keys():
             await self.greet(recipient)
         return ret
 
@@ -148,28 +145,30 @@ class Whispr(QuestionBot):
         return f"you're already following {msg.arg1}"
 
     @takes_number
-    async def do_invite(self, msg: Message, target_number: str) -> str:
+    async def do_invite(self, msg: Message, invitee: str) -> str:
         """
         /invite [number or name]. invite someone to follow you
         """
+        inviter = msg.source
 
         async def follow() -> None:
-            name = await self.user_names.get(msg.source, msg.name or msg.source)
+            name = await self.user_names.get(inviter, msg.name or inviter)
             if await self.ask_yesno_question(
-                target_number,
+                invitee,
                 f"{name} invited you to follow them on whispr. "
                 "text (y)es or (n)o/cancel to accept",
             ):
-                await self.followers.extend(target_number, msg.source)
-                await self.send_message(target_number, f"followed {msg.source}")
-                await self.send_message(msg.source, f"{target_number} followed you")
+                #
+                await self.followers.extend(inviter, invitee)
+                await self.send_message(invitee, f"followed {name}")
+                await self.send_message(inviter, f"{invitee} followed you")
             else:
-                await self.send_message(target_number, f"didn't follow {msg.source}")
+                await self.send_message(invitee, f"didn't follow {name}")
 
-        if target_number not in await self.followers.get(msg.source, []):
+        if invitee not in await self.followers.get(inviter, []):
             asyncio.create_task(follow())
-            return f"invited {target_number}"
-        return f"you're already following {target_number}"
+            return f"invited {invitee}"
+        return f"{invitee} already follows you"
 
     async def do_followers(self, msg: Message) -> str:
         """/followers. list your followers"""
