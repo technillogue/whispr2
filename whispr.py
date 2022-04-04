@@ -10,6 +10,7 @@ import phonenumbers as pn
 from forest.core import Message, QuestionBot, Response, requires_admin, run_bot
 from forest.pdictng import aPersistDict, aPersistDictOfLists
 from forest import utils
+import mc_util
 
 
 def takes_number(command: Callable) -> Callable:
@@ -100,7 +101,7 @@ class Whispr(QuestionBot):
     async def default(self, message: Message) -> None:
         """send a message to your followers"""
         logging.info(message)
-        if not message.source or not message.full_text:
+        if not message.source or (not message.full_text and not message.attachments):
             logging.info(
                 "no message source %s or not message text %s",
                 message.source,
@@ -147,11 +148,27 @@ class Whispr(QuestionBot):
         await self.name_numbers.set(name, msg.source)
         return f"other users will now see you as {name}. you used to be {old_name}"
 
+    async def do_set_follow_price(self, msg: Message) -> str:
+        "set follow price"
+        price = await self.ask_floatable_question(msg.source, "how much MOB to follow you?")
+        if not price:
+            return "Okay, never mind"
+        await self.follow_price.set(msg.source, mc_util.mob2pmob(price))
+        return f"It now costs {price} to follow you"
+
     @takes_number
     async def do_follow(self, msg: Message, target_number: str) -> str:
         """/follow [number or name]. follow someone"""
         if msg.source not in await self.followers.get(target_number, []):
-            # check for payment here
+            price = mc_util.mob2pmob(await self.follow_price.get(msg.source, 0))
+            if price:
+                balance = await self.mobster.ledger_manager.get_pmob_balance(msg.source)
+                if price > balance:
+                    return "following costs {price}"
+                price_usd = await self.mobster.pmob2usd(price)
+                await self.mobster.ledger_manager.put_pmob_tx(msg.source, -price_usd, -price, f"follow {target_number}")
+                await self.send_message(target_number, "sending you a payment from {msg.source} for following you")
+                asyncio.create_task(self.send_payment(target_number, price, f"{msg.source} followed you"))
             name = await self.user_names.get(msg.source, msg.name or msg.source)
             await self.send_message(target_number, f"{name} has followed you")
             await self.followers.extend(target_number, msg.source)
