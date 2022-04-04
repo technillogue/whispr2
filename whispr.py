@@ -44,6 +44,10 @@ class Whispr(QuestionBot):
         self.follow_price: aPersistDict[int] = aPersistDict("follow_price")
         super().__init__(bot_number)
 
+    async def start_process(self) -> None:
+        await self.admin("\N{deciduous tree}\N{robot face}\N{hiking boot}")
+        await super().start_process()
+
     async def greet(self, recipient: str) -> None:
         await self.user_names.set(recipient, recipient)
         await self.name_numbers.set(recipient, recipient)
@@ -150,25 +154,38 @@ class Whispr(QuestionBot):
 
     async def do_set_follow_price(self, msg: Message) -> str:
         "set follow price"
-        price = await self.ask_floatable_question(msg.source, "how much MOB to follow you?")
-        if not price:
-            return "Okay, never mind"
+        price = await self.ask_floatable_question(
+            msg.source, "how much MOB to follow you?"
+        )
+        if price is None:
+            return "okay, never mind"
         await self.follow_price.set(msg.source, mc_util.mob2pmob(price))
-        return f"It now costs {price} to follow you"
+        return f"it now costs {price} to follow you"
 
     @takes_number
     async def do_follow(self, msg: Message, target_number: str) -> str:
         """/follow [number or name]. follow someone"""
         if msg.source not in await self.followers.get(target_number, []):
-            price = mc_util.mob2pmob(await self.follow_price.get(msg.source, 0))
+            price = await self.follow_price.get(target_number, 0)
             if price:
-                balance = await self.mobster.ledger_manager.get_pmob_balance(msg.source)
+                balance = await self.get_user_pmob_balance(msg.source)
                 if price > balance:
-                    return "following costs {price}"
+                    return f"following costs {mc_util.pmob2mob(price)} MOB"
                 price_usd = await self.mobster.pmob2usd(price)
-                await self.mobster.ledger_manager.put_pmob_tx(msg.source, -price_usd, -price, f"follow {target_number}")
-                await self.send_message(target_number, "sending you a payment from {msg.source} for following you")
-                asyncio.create_task(self.send_payment(target_number, price, f"{msg.source} followed you"))
+                await self.mobster.ledger_manager.put_pmob_tx(
+                    msg.source, -price_usd, -price, f"follow {target_number}"
+                )
+                await self.send_message(
+                    target_number,
+                    "sending you a payment from {msg.source} for following you",
+                )
+                asyncio.create_task(
+                    self.send_payment(
+                        target_number,
+                        price - mc_util.FEE_PMOB,
+                        f"{msg.source} followed you",
+                    )
+                )
             name = await self.user_names.get(msg.source, msg.name or msg.source)
             await self.send_message(target_number, f"{name} has followed you")
             await self.followers.extend(target_number, msg.source)
@@ -236,7 +253,7 @@ class Whispr(QuestionBot):
         """/unfollow [target_number or name]. unfollow someone"""
         if msg.source not in await self.followers.get(target_number, []):
             return f"you aren't following {msg.arg1}"
-        self.followers.remove_from(target_number, msg.source)
+        await self.followers.remove_from(target_number, msg.source)
         return f"unfollowed {msg.arg1}"
 
     @requires_admin
@@ -244,7 +261,7 @@ class Whispr(QuestionBot):
     async def do_forceinvite(self, msg: Message, target_number: str) -> str:
         if target_number in await self.followers.get(msg.source, []):
             return f"{msg.arg1} is already following you"
-        await self.followers.extend(target_number, msg.source)
+        await self.followers.extend(msg.source, target_number)
         await self.send_message(target_number, f"you are now following {msg.source}")
         return f"{msg.arg1} is now following you"
 

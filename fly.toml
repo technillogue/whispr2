@@ -17,6 +17,9 @@ AUTOSAVE=1
 FULL_SERVICE_URL="https://whispr2-fs.fly.dev/wallet"
 LEDGER_NAME="whispr_ledger"
 
+[deploy]
+  strategy = "immediate"
+
 [experimental]
   allowed_public_ports = []
   auto_rollback = true

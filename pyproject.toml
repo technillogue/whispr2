@@ -6,7 +6,7 @@ authors = ["technillogue <technillogue@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-forestbot = {git = "https://github.com/mobilecoinofficial/forest", rev = "main"}
+forestbot = {git = "https://github.com/mobilecoinofficial/forest", rev = "2c1e08d"}
 
 [tool.poetry.dev-dependencies]
 pylint = "*"
