@@ -133,7 +133,7 @@ class Whispr(QuestionBot):
                 await self.send_message(
                     follower, f"{name}: {message.full_text}", attachments=attachments
                 )
-            # await self.send_reaction(message, "\N{Outbox Tray}")
+            await self.send_reaction(message, "\N{Outbox Tray}")
 
     async def do_help(self, msg: Message) -> Response:
         return (await super().do_help(msg)).lower()  # type: ignore
@@ -179,13 +179,17 @@ class Whispr(QuestionBot):
                     target_number,
                     "sending you a payment from {msg.source} for following you",
                 )
-                asyncio.create_task(
-                    self.send_payment(
+                await self.send_typing(target_number)
+
+                async def pay():
+                    await self.send_payment(
                         target_number,
                         price - mc_util.FEE_PMOB,
                         f"{msg.source} followed you",
                     )
-                )
+                    await self.send_typing(target_number)
+
+                asyncio.create_task(pay())
             name = await self.user_names.get(msg.source, msg.name or msg.source)
             await self.send_message(target_number, f"{name} has followed you")
             await self.followers.extend(target_number, msg.source)
