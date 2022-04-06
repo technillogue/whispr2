@@ -46,6 +46,7 @@ class Whispr(QuestionBot):
         self.name_numbers: aPersistDict[str] = aPersistDict("name_numbers")
         self.followers: aPersistDictOfLists[str] = aPersistDictOfLists("followers")
         self.blocked: aPersistDict[bool] = aPersistDict("blocked")
+        self.claimed_airdrop: aPersistDict[bool] = aPersistDict("claimed_airdrop")
         self.follow_price: aPersistDict[int] = aPersistDict("follow_price")
         super().__init__(bot_number)
 
@@ -273,6 +274,50 @@ class Whispr(QuestionBot):
         await self.followers.extend(msg.source, target_number)
         await self.send_message(target_number, f"you are now following {msg.source}")
         return f"{msg.arg1} is now following you"
+
+    @takes_number
+    async def do_tip(self, msg: Message, target_number: str) -> str:
+        if not msg.arg2:
+            msg.arg2 = await self.ask_floatable_question(
+                msg.source, "how much MOB to tip?"
+            )
+            if not msg.arg2:
+                return "okay, never mind"
+        if msg.source not in await self.claimed_airdrop.keys():
+            # deferred airdrop logic goes here
+            pass
+        balance = await self.get_user_pmob_balance(msg.source)
+        if mc_util.mob2pmob(float(msg.arg2)) > balance:
+            return f"insufficiant balance"
+        price_usd = await self.mobster.pmob2usd(price)
+        await self.mobster.ledger_manager.put_pmob_tx(
+            msg.source, -price_usd, -price, f"tip {target_number}"
+        )
+
+    async def send_tip(self, msg: Message, target_number: str, amount: int):
+        try:
+            self.send_payment(
+                target_number,
+                amount,
+                f"{msg.source} tipped you",
+            )
+        except UserError:
+            self.send_message(
+                target_number,
+                "{msg.source} is trying to tip you. activate payments, and say 'withdraw' to get your tip",
+            )
+
+    async def do_withdraw(self, msg: Message) -> str:
+        balance = await self.get_user_pmob_balance(msg.source)
+        balance_mob = mc_util.pmob2mob(balance)
+        balance_usd = await self.mobster.pmob2usd(balance)
+        await self.respond(msg, f"sending you {balance_mob} MOB")
+        await self.send_typing(msg)
+        await self.send_payment(msg.source, balance, "withdraw")
+        await self.mobster.ledger_manager.put_pmob_tx(
+            msg.source, -balance_usd, -price, f"tip {target_number}"
+        )
+        await self.send_typing(msg, stop=True)
 
 
 if __name__ == "__main__":
