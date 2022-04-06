@@ -5,7 +5,7 @@ import asyncio
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Awaitable
 import phonenumbers as pn
 from forest.core import Message, QuestionBot, Response, requires_admin, run_bot
 from forest.pdictng import aPersistDict, aPersistDictOfLists
@@ -33,6 +33,11 @@ def takes_number(command: Callable) -> Callable:
             )
 
     return wrapped_command
+
+
+async def chain(*coros: Awaitable) -> None:
+    for coro in coros:
+        await coro
 
 
 class Whispr(QuestionBot):
@@ -179,17 +184,17 @@ class Whispr(QuestionBot):
                     target_number,
                     "sending you a payment from {msg.source} for following you",
                 )
-                await self.send_typing(target_number)
-
-                async def pay():
-                    await self.send_payment(
-                        target_number,
-                        price - mc_util.FEE_PMOB,
-                        f"{msg.source} followed you",
+                asyncio.create_task(
+                    chain(
+                        self.send_typing(target_number),
+                        self.send_payment(
+                            target_number,
+                            price - mc_util.FEE_PMOB,
+                            f"{msg.source} followed you",
+                        ),
+                        self.send_typing(target_number, stop=True),
                     )
-                    await self.send_typing(target_number)
-
-                asyncio.create_task(pay())
+                )
             name = await self.user_names.get(msg.source, msg.name or msg.source)
             await self.send_message(target_number, f"{name} has followed you")
             await self.followers.extend(target_number, msg.source)
