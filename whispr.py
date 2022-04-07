@@ -278,6 +278,10 @@ class Whispr(QuestionBot):
         await self.send_message(target_number, f"you are now following {msg.source}")
         return f"{msg.arg1} is now following you"
 
+    # /tip opal 0.1
+    # /tip opal -> asks how much or assumes an amount
+    # if the person sending the tip and can get an airdrop
+
     @takes_number
     async def do_tip(self, msg: Message, target_number: str) -> str:
         if not msg.arg2:
@@ -300,7 +304,7 @@ class Whispr(QuestionBot):
         await self.mobster.ledger_manager.put_pmob_tx(
             msg.source, tip_usd, tip, f"tip from {target_number}"
         )
-        await self.send_tip(msg, target_number, tip)
+        asyncio.create_task(self.send_tip(msg, target_number, tip))
         return "sending a tip"
 
     async def send_tip(self, msg: Message, target_number: str, amount: int):
@@ -314,10 +318,14 @@ class Whispr(QuestionBot):
             await self.mobster.ledger_manager.put_pmob_tx(
                 msg.source, -amount_usd, -amount, f"tip {target_number}"
             )
+            # person receiving the tip received it, we can send the airdrop to the person tipping
         except UserError:
             self.send_message(
                 target_number,
-                "{msg.source} is trying to tip you. activate payments, and say 'withdraw' to get your tip",
+                (
+                    f"{msg.source} is trying to tip you. "
+                    "activate payments, and say 'withdraw' to get your tip"
+                ),
             )
 
     async def do_withdraw(self, msg: Message) -> str:
@@ -330,6 +338,9 @@ class Whispr(QuestionBot):
         await self.mobster.ledger_manager.put_pmob_tx(
             msg.source, -balance_usd, -balance, "withdraw"
         )
+        # check if the person withdrawing received a tip from someone who hasn't received an airdrop yet
+        # if so, we want to credit/send the person who sent that tip,
+        # now that the person receiving the tip got money
         await self.send_typing(msg, stop=True)
         return "sent you your MOB!"
 
