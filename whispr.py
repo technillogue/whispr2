@@ -59,9 +59,12 @@ class Whispr(QuestionBot):
         await self.name_numbers.set(recipient, recipient)
         await super().send_message(
             recipient,
-            "welcome to whispr, a social media that runs on signal. "
-            "text STOP or BLOCK to not receive messages. type /help "
-            "to view available commands.",
+            [
+                "welcome to whispr, a social media that runs on signal. "
+                "text STOP or BLOCK to not receive messages. type /help "
+                "to view available commands.",
+                "send a 0.01 'tip' to someone. when they claim it, get 0.01 MOB yourself",
+            ],
         )
         name = await self.ask_freeform_question(
             recipient, "what would you like to be called?"
@@ -187,13 +190,13 @@ class Whispr(QuestionBot):
                 )
                 asyncio.create_task(
                     chain(
-                        self.send_typing(target_number),
+                        self.send_typing(recipient=target_number),
                         self.send_payment(
                             target_number,
                             price - mc_util.FEE_PMOB,
                             f"{msg.source} followed you",
                         ),
-                        self.send_typing(target_number, stop=True),
+                        self.send_typing(recipient=target_number, stop=True),
                     )
                 )
             name = await self.user_names.get(msg.source, msg.name or msg.source)
@@ -287,12 +290,18 @@ class Whispr(QuestionBot):
             # deferred airdrop logic goes here
             pass
         balance = await self.get_user_pmob_balance(msg.source)
-        if mc_util.mob2pmob(float(msg.arg2)) > balance:
+        tip = mc_util.mob2pmob(float(msg.arg2))
+        if tip > balance:
             return f"insufficiant balance"
-        price_usd = await self.mobster.pmob2usd(price)
+        tip_usd = await self.mobster.pmob2usd(tip)
         await self.mobster.ledger_manager.put_pmob_tx(
-            msg.source, -price_usd, -price, f"tip {target_number}"
+            msg.source, -tip_usd, -tip, f"tip {target_number}"
         )
+        await self.mobster.ledger_manager.put_pmob_tx(
+            msg.source, tip_usd, tip, f"tip from {target_number}"
+        )
+        await self.send_tip(msg, target_number, tip)
+        return "sending a tip"
 
     async def send_tip(self, msg: Message, target_number: str, amount: int):
         try:
@@ -300,6 +309,10 @@ class Whispr(QuestionBot):
                 target_number,
                 amount,
                 f"{msg.source} tipped you",
+            )
+            amount_usd = await self.mobster.pmob2usd(amount)
+            await self.mobster.ledger_manager.put_pmob_tx(
+                msg.source, -amount_usd, -amount, f"tip {target_number}"
             )
         except UserError:
             self.send_message(
@@ -315,9 +328,10 @@ class Whispr(QuestionBot):
         await self.send_typing(msg)
         await self.send_payment(msg.source, balance, "withdraw")
         await self.mobster.ledger_manager.put_pmob_tx(
-            msg.source, -balance_usd, -price, f"tip {target_number}"
+            msg.source, -balance_usd, -balance, "withdraw"
         )
         await self.send_typing(msg, stop=True)
+        return "sent you your MOB!"
 
 
 if __name__ == "__main__":
