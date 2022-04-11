@@ -50,6 +50,8 @@ async def chain(*coros: Awaitable) -> None:
 
 
 class Whispr(QuestionBot):
+    do_bot_balance = do_balance
+
     def __init__(self, bot_number: Optional[str] = None) -> None:
         self.user_names: aPersistDict[str] = aPersistDict("user_names")
         self.name_numbers: aPersistDict[str] = aPersistDict("name_numbers")
@@ -380,7 +382,7 @@ class Whispr(QuestionBot):
 
     async def send_tip(self, msg: Message, target_number: str, amount: int) -> None:
         try:
-            self.send_payment(
+            await self.send_payment(
                 target_number,
                 amount,
                 f"{msg.source} tipped you",
@@ -398,6 +400,16 @@ class Whispr(QuestionBot):
                     "activate payments, and say 'withdraw' to get your tip"
                 ),
             )
+
+    async def do_balance(self, msg: Message) -> str:
+        "returns your whispr balance in MOB"
+        balance_pmob = await self.get_user_pmob_balance(msg.source)
+        balance_msg = (
+            f"your current balance is {mc_util.pmob2mob(balance_pmob).normalize()} MOB"
+        )
+        if balance == 0:
+            balance_msg += "\n\n to buy more credits, send whipsr some mobilecoin"
+        return balance_msg
 
     async def do_withdraw(self, msg: Message) -> str:
         balance = await self.get_user_pmob_balance(msg.source)

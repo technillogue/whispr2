@@ -10,7 +10,7 @@ RUN unzip auxin-cli.zip && chmod +x ./auxin-cli
 
 FROM python:3.9 as libbuilder
 WORKDIR /app
-RUN pip install poetry
+RUN pip install poetry setuptools
 RUN python3.9 -m venv /app/venv 
 COPY ./pyproject.toml ./poetry.lock /app/
 RUN VIRTUAL_ENV=/app/venv poetry install --no-dev
