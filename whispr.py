@@ -125,7 +125,7 @@ class Whispr(QuestionBot):
         """send a message to your followers"""
         logging.info(message)
         if not message.source or (not message.full_text and not message.attachments):
-            logging.info(
+            logging.debug(
                 "no message source %s or not message text %s",
                 message.source,
                 message.text,
@@ -303,7 +303,6 @@ class Whispr(QuestionBot):
         return "you will show up in recommended accounts to follow"
 
     async def do_recommend(self, msg: Message) -> str:
-        followers_items = await self.followers.items()
         user_follows = [
             number
             for number, followers in await self.followers.items()
@@ -353,7 +352,7 @@ class Whispr(QuestionBot):
         balance = await self.get_user_pmob_balance(msg.source)
         tip = mc_util.mob2pmob(float(msg.arg2))
         if tip > balance:
-            return f"insufficiant balance"
+            return "insufficiant balance"
         tip_usd = await self.mobster.pmob2usd(tip)
         await self.mobster.ledger_manager.put_pmob_tx(
             msg.source, -tip_usd, -tip, f"tip {target_number}"
