@@ -3,14 +3,23 @@
 # Copyright (c) 2021 The Forest Team
 import asyncio
 import logging
+from collections import Counter
 from functools import wraps
 from pathlib import Path
-from typing import Callable, Optional, Awaitable
-import phonenumbers as pn
-from forest.core import Message, QuestionBot, Response, requires_admin, run_bot
-from forest.pdictng import aPersistDict, aPersistDictOfLists
-from forest import utils
+from typing import Awaitable, Callable, Optional
+
 import mc_util
+import phonenumbers as pn
+from forest import utils
+from forest.core import (
+    Message,
+    QuestionBot,
+    Response,
+    UserError,
+    requires_admin,
+    run_bot,
+)
+from forest.pdictng import aPersistDict, aPersistDictOfLists
 
 
 def takes_number(command: Callable) -> Callable:
@@ -48,6 +57,7 @@ class Whispr(QuestionBot):
         self.blocked: aPersistDict[bool] = aPersistDict("blocked")
         self.claimed_airdrop: aPersistDict[bool] = aPersistDict("claimed_airdrop")
         self.follow_price: aPersistDict[int] = aPersistDict("follow_price")
+        self.locked: aPersistDict[bool] = aPersistDict("locked")
         super().__init__(bot_number)
 
     async def start_process(self) -> None:
@@ -278,6 +288,53 @@ class Whispr(QuestionBot):
         await self.send_message(target_number, f"you are now following {msg.source}")
         return f"{msg.arg1} is now following you"
 
+    async def do_lock(self, msg: Message) -> str:
+        "don't let people discover you"
+        if await self.locked.get(msg.source):
+            return "you're already locked"
+        await self.locked.set(msg.source, True)
+        return "you will no longer show up in recommended accounts to follow"
+
+    async def do_unlock(self, msg: Message) -> str:
+        "let people discover you"
+        if not await self.locked.get(msg.source):
+            return "you weren't locked"
+        await self.locked.set(msg.source, False)
+        return "you will show up in recommended accounts to follow"
+
+    async def do_recommend(self, msg: Message) -> str:
+        followers_items = await self.followers.items()
+        user_follows = [
+            number
+            for number, followers in await self.followers.items()
+            if msg.source in followers
+        ]
+        people_you_follow_follow = [
+            await self.user_names.get(number, number)
+            for person in user_follows
+            for number, followers in await self.followers.items()
+            if person in followers
+            and number not in user_follows
+            and number != msg.source
+            and not await self.locked.get(number)
+        ]
+        return "\n".join(
+            f"{n} people you follow follow {name}"
+            for name, n in Counter(people_you_follow_follow).most_common(n=10)
+        )
+
+        # await self.user_names.get(number, number): [
+        #     await self.user_names.get(number2, number2)
+        #     for number2, followers in await self.followers.items()
+        #     if number in followers
+        # ]
+        # Counter(
+        #     await self.user_names.get(number2, number2)
+        #     for number, followers in await self.followers.items()
+        #     for number2, followers2 in await self.followers.items()
+        #     if msg.source in followers and number in follower2
+        # )
+
     # /tip opal 0.1
     # /tip opal -> asks how much or assumes an amount
     # if the person sending the tip and can get an airdrop
@@ -307,7 +364,7 @@ class Whispr(QuestionBot):
         asyncio.create_task(self.send_tip(msg, target_number, tip))
         return "sending a tip"
 
-    async def send_tip(self, msg: Message, target_number: str, amount: int):
+    async def send_tip(self, msg: Message, target_number: str, amount: int) -> None:
         try:
             self.send_payment(
                 target_number,
