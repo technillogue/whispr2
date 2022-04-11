@@ -317,8 +317,23 @@ class Whispr(QuestionBot):
             and number != msg.source
             and not await self.locked.get(number)
         ]
+        # [
+        #     (
+        #         await self.user_names.get(person, person),
+        #         sum(
+        #             user_follow in await self.followers.get(person)
+        #             for user_follow in user_follows
+        #         ),
+        #     )
+        #     for person in await self.user_names.keys()
+        #     if person not in user_follows
+        #     and person != msg.source
+        #     and not await self.locked.get(person)
+        # ]
+        if not people_you_follow_follow:
+            return "you already follow everyone followed by people you follow"
         return "\n".join(
-            f"{n} people you follow follow {name}"
+            f"{name} is followed by {n} people you follow"
             for name, n in Counter(people_you_follow_follow).most_common(n=10)
         )
 
