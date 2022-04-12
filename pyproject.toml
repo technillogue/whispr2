@@ -9,9 +9,9 @@ python = "^3.9"
 forestbot = {git = "https://github.com/mobilecoinofficial/forest", branch = "syl/whispr"}
 
 [tool.poetry.dev-dependencies]
-pylint = "*"
-black = "*"
-mypy = "*"
+# pylint = "*"
+# black = "*"
+# mypy = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

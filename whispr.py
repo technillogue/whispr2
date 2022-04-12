@@ -50,7 +50,7 @@ async def chain(*coros: Awaitable) -> None:
 
 
 class Whispr(QuestionBot):
-    do_bot_balance = do_balance
+    do_bot_balance = QuestionBot.do_balance
 
     def __init__(self, bot_number: Optional[str] = None) -> None:
         self.user_names: aPersistDict[str] = aPersistDict("user_names")
@@ -381,11 +381,12 @@ class Whispr(QuestionBot):
         return "sending a tip"
 
     async def send_tip(self, msg: Message, target_number: str, amount: int) -> None:
+        name = await self.user_names.get(message.source)
         try:
             await self.send_payment(
                 target_number,
                 amount,
-                f"{msg.source} tipped you",
+                f"{name} tipped you",
             )
             amount_usd = await self.mobster.pmob2usd(amount)
             await self.mobster.ledger_manager.put_pmob_tx(
@@ -393,10 +394,10 @@ class Whispr(QuestionBot):
             )
             # person receiving the tip received it, we can send the airdrop to the person tipping
         except UserError:
-            self.send_message(
+            await self.send_message(
                 target_number,
                 (
-                    f"{msg.source} is trying to tip you. "
+                    f"{name} is trying to tip you. "
                     "activate payments, and say 'withdraw' to get your tip"
                 ),
             )
@@ -407,8 +408,8 @@ class Whispr(QuestionBot):
         balance_msg = (
             f"your current balance is {mc_util.pmob2mob(balance_pmob).normalize()} MOB"
         )
-        if balance == 0:
-            balance_msg += "\n\n to buy more credits, send whipsr some mobilecoin"
+        if balance_pmob == 0:
+            balance_msg += "\n\nsend whipsr some mobilecoin to follow paid accounts or tip"
         return balance_msg
 
     async def do_withdraw(self, msg: Message) -> str:
