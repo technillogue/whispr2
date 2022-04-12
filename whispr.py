@@ -5,20 +5,11 @@ import asyncio
 import logging
 from collections import Counter
 from functools import wraps
-from pathlib import Path
-from typing import Awaitable, Callable, Optional
-
-import mc_util
+from typing import Any, Awaitable, Callable, Optional
 import phonenumbers as pn
-from forest import utils
-from forest.core import (
-    Message,
-    QuestionBot,
-    Response,
-    UserError,
-    requires_admin,
-    run_bot,
-)
+import mc_util
+from forest import core
+from forest.core import Message, QuestionBot, Response, UserError, requires_admin
 from forest.pdictng import aPersistDict, aPersistDictOfLists
 
 
@@ -50,6 +41,7 @@ async def chain(*coros: Awaitable) -> None:
 
 
 class Whispr(QuestionBot):
+    # pylint: disable=too-many-public-methods
     do_bot_balance = QuestionBot.do_balance
 
     def __init__(self, bot_number: Optional[str] = None) -> None:
@@ -100,8 +92,8 @@ class Whispr(QuestionBot):
         group: Optional[str] = None,  # maybe combine this with recipient?
         endsession: bool = False,
         attachments: Optional[list[str]] = None,
-        content: str = "",
-        **other_params: str,
+        content: Optional[dict] = None,
+        **other_params: Any,
     ) -> str:
         if recipient and recipient in await self.blocked.keys():
             logging.debug("recipient % is blocked, not sending", recipient)
@@ -137,20 +129,9 @@ class Whispr(QuestionBot):
             # ensures they'll get a welcome message
         else:
             name = await self.user_names.get(message.source)
+            attachments = await core.get_attachment_paths(message)
             for follower in await self.followers.get(message.source, []):
                 logging.info("sending to follower %s", follower)
-                # self.sent_messages[round(time.time())][follower] = message
-                if utils.AUXIN:
-                    attachments = [
-                        str(Path("/tmp") / attach["fileName"])
-                        for attach in (message.attachments or [])
-                    ]
-                else:
-                    attachments = [
-                        str(Path("attachments") / attach["id"])
-                        for attach in (message.attachments or [])
-                    ]
-                logging.info(attachments)
                 await self.send_message(
                     follower, f"{name}: {message.full_text}", attachments=attachments
                 )
@@ -170,6 +151,7 @@ class Whispr(QuestionBot):
         if name in await self.name_numbers.keys():
             return f"'{name}' is already taken, use /name to set a different name"
         await self.user_names.set(msg.source, name)
+        await self.name_numbers.pop(old_name)
         await self.name_numbers.set(name, msg.source)
         return f"other users will now see you as {name}. you used to be {old_name}"
 
@@ -360,7 +342,7 @@ class Whispr(QuestionBot):
         if not msg.arg2:
             msg.arg2 = await self.ask_floatable_question(
                 msg.source, "how much MOB to tip?"
-            )
+            )  # type: ignore
             if not msg.arg2:
                 return "okay, never mind"
         if msg.source not in await self.claimed_airdrop.keys():
@@ -381,7 +363,7 @@ class Whispr(QuestionBot):
         return "sending a tip"
 
     async def send_tip(self, msg: Message, target_number: str, amount: int) -> None:
-        name = await self.user_names.get(message.source)
+        name = await self.user_names.get(msg.source)
         try:
             await self.send_payment(
                 target_number,
@@ -409,7 +391,9 @@ class Whispr(QuestionBot):
             f"your current balance is {mc_util.pmob2mob(balance_pmob).normalize()} MOB"
         )
         if balance_pmob == 0:
-            balance_msg += "\n\nsend whipsr some mobilecoin to follow paid accounts or tip"
+            balance_msg += (
+                "\n\nsend whipsr some mobilecoin to follow paid accounts or tip"
+            )
         return balance_msg
 
     async def do_withdraw(self, msg: Message) -> str:
@@ -430,4 +414,4 @@ class Whispr(QuestionBot):
 
 
 if __name__ == "__main__":
-    run_bot(Whispr)
+    core.run_bot(Whispr)
