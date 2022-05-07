@@ -119,15 +119,13 @@ class Whispr(QuestionBot):
         """send a message to your followers"""
         logging.info(message)
         if not message.source or (not message.full_text and not message.attachments):
-            logging.debug(
-                "no message source %s or not message text %s",
-                message.source,
-                message.text,
-            )
+            pass
         elif message.source not in await self.user_names.keys():
             await self.send_message(message.source, f"{message.text} yourself")
             # ensures they'll get a welcome message
         else:
+            if message.quoted_text and ":" in message.quoted_text:
+                message.full_text += " QRW @" + message.quoted_text
             name = await self.user_names.get(message.source)
             attachments = await core.get_attachment_paths(message)
             for follower in await self.followers.get(message.source, []):
@@ -180,7 +178,7 @@ class Whispr(QuestionBot):
                 )
                 await self.send_message(
                     target_number,
-                    "sending you a payment from {msg.source} for following you",
+                    f"sending you a payment from {msg.source} for following you",
                 )
                 asyncio.create_task(
                     chain(
