@@ -17,7 +17,9 @@ def takes_number(command: Callable) -> Callable:
     @wraps(command)  # keeps original name and docstring for /help
     async def wrapped_command(self: "Whispr", msg: Message) -> str:
         if msg.arg1:
-            maybe_number = await self.name_numbers.get(msg.arg1)
+            maybe_number = await self.name_numbers.get(
+                msg.arg1
+            ) or await self.name_numbers.get(msg.arg1.lower())
             if maybe_number:
                 return await command(self, msg, maybe_number)
         try:
@@ -146,11 +148,11 @@ class Whispr(QuestionBot):
             return (
                 f"missing name argument. usage: /name [name]. your name is {old_name}"
             )
-        if name in await self.name_numbers.keys():
+        if name in await self.name_numbers.keys() or name.lower() in await self.name_numbers.keys():
             return f"'{name}' is already taken, use /name to set a different name"
-        await self.user_names.set(msg.source, name)
+        await self.user_names.set(msg.source, name.lower())
         await self.name_numbers.pop(old_name)
-        await self.name_numbers.set(name, msg.source)
+        await self.name_numbers.set(name.lower(), msg.source)
         return f"other users will now see you as {name}. you used to be {old_name}"
 
     async def do_set_follow_price(self, msg: Message) -> str:
