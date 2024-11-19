@@ -1,4 +1,4 @@
-FROM registry.gitlab.com/packaging/signal-cli/signal-cli-native:v0-12-8-1 as signal
+FROM registry.gitlab.com/packaging/signal-cli/signal-cli-native:v0-13-9-1 as signal
 USER root
 #/RUN signal-cli --version | tee /signal-version
 RUN mv /usr/bin/signal-cli-native /usr/bin/signal-cli
@@ -20,7 +20,8 @@ RUN --mount=type=cache,target=/root/.cache/pip VIRTUAL_ENV=/app/venv poetry inst
 FROM ubuntu:jammy
 WORKDIR /app
 RUN mkdir -p /app/data
-RUN apt-get update && apt-get install -y python3.11 ca-certificates libfuse2 \
+RUN --mount=type=cache,target=/var/cache/apt apt-get update \
+  && apt-get install -y python3.11 ca-certificates libfuse2 \
   && apt-get clean autoclean && apt-get autoremove --yes && rm -rf /var/lib/{apt,dpkg,cache,log}/
 COPY --from=signal /usr/bin/signal-cli /signal-cli.version /app/
 COPY --from=signal /lib/x86_64-linux-gnu/libz.so.1 /lib64/
